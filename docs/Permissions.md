@@ -1,6 +1,8 @@
 # Mirai Console Backend - Permissions
 
-权限系统。
+Mirai Console 权限系统。
+
+> 优先使用 Mirai Console 权限系统管理权限是最好的选择
 
 [`PermissionService`]: ../backend/mirai-console/src/permission/PermissionService.kt
 [`Permission`]: ../backend/mirai-console/src/permission/Permission.kt
@@ -25,7 +27,7 @@ interface Permission {
 }
 ```
 
-「权限」表示的意义是 “做一项工作的能力”。如 “执行指令 /stop”，“操作数据库” 都叫作权限。
+「权限」表示的意义是 “做一项工作的能力”。如 “执行指令 /stop”，“操作数据库” 都能叫作权限。
 
 [`Permission`] 对象由 Console 内置或者由特定权限插件实现。其他插件不能实现 [`Permission`] 接口，只能从 `PermissionService` 注册并获取。
 
@@ -40,11 +42,13 @@ data class PermissionId(
 
 [`PermissionId`] 是 [`Permission`] 的唯一标识符。知道 [`PermissionId`] 就可以获取到对应的 [`Permission`]。
 
-字符串表示为 "$namespace:$name"，如 "console:command.stop", "\*:\*"
+字符串表示为 `$namespace:$name`，如 `console:command.stop`, `*:*`
+
+> 一般情况下使用位于插件对象(`JvmPlugin`) 的 `permissionId` 为插件分配一个 [`PermissionId`]
 
 #### 命名空间
 
-命名空间（“namespace”）用于限定权限的创建者，避免冲突。
+命名空间（`namespace`）用于限定权限的创建者，避免冲突。
 
 一些常见命名空间：
 
@@ -68,7 +72,9 @@ data class PermissionId(
 
 #### 根权限
 
-[`RootPermission`] 是所有权限的父权限。其 ID 为 "\*:\*"
+[`RootPermission`] 是所有权限的父权限。其 ID 为 `*:*`
+
+> 如果 [`Permittee`] (见下文) 拥有根权限, 相当于 [`Permittee`] 拥有全部权限 (内置实现)
 
 ## 被许可人
 
@@ -97,7 +103,7 @@ interface PermitteeId {
 
 [`PermitteeId`] 是被许可人的标识符。
 
-一个这样的标识符即可代表特定的单个 [`Permittee`], 也可以表示多个同类 [`Permittee`].
+一个这样的标识符既可代表特定的单个 [`Permittee`], 也可以表示多个同类 [`Permittee`].
 
 #### `directParents`
 [`PermitteeId`] 允许拥有多个父对象。在检查权限时会首先检查自己, 再递归检查父类。
@@ -108,6 +114,8 @@ interface PermitteeId {
 
 在 [`AbstractPermitteeId`] 查看其子类。
 
+**注意**: 对应 [权限服务][`PermissionService`] 没明确说明可以自行实现时, 不要轻易实现 [`PermitteeId`]
+
 #### 字符串表示
 
 当使用 `PermitteeId.asString` 时, 不同的类型的返回值如下表所示. 这些格式也适用于 [权限指令](#使用内置权限服务指令).  
@@ -117,12 +125,12 @@ interface PermitteeId {
 |:----------------:|:-----------:|:------------------------------------|
 |      控制台       |   console   |                                     |
 |   任意其他客户端    |   client*   | 即 Bot 自己发消息给自己                |
-|      精确群       |   g123456   | 表示群, 而不表示群成员                  |
+|      精确群       |   g123456   | 表示群, **而不表示群成员, 不表示群成员** |
 |      精确好友      |   f123456   | 必须通过好友消息                       |
 |   精确群临时会话    | t123456.789 | 群 123456 内的成员 789. 必须通过临时会话 |
 |     精确群成员     | m123456.789 | 群 123456 内的成员 789. 同时包含临时会话 |
 |      精确用户      |   u123456   | 同时包含群成员, 好友, 临时会话           |
-|      任意群       |     g\*     | g 意为 group                         |
+|      任意群       |     g\*     | g 意为 group, **不表示群成员**           |
 |  任意群的任意群员   |     m\*     | m 意为 member                        |
 |  精确群的任意群员   | m123456.\*  | 群 123456 内的任意成员. 同时包含临时会话  |
 |    任意临时会话    |     t\*      | t 意为 temp. 必须通过临时会话          |
@@ -139,7 +147,15 @@ interface PermitteeId {
 
 ## 权限服务
 
-[`PermissionService`] 承载权限的授权和管理。Console 内置一个实现，而权限服务可以由插件提供（见 [扩展](Extensions.md)）。
+[`PermissionService`] 承载权限的授权和管理。 Console 的权限系统完全由 [`PermissionService`] 提供支持。
+权限服务可以由插件提供（见 [扩展](Extensions.md)）。
+在没有任何提供权限服务的插件时会使用 Console 内置实现。
+
+在整个运行时 Console 只会使用同一个权限服务，如果安装多个提供权限服务的插件很有可能导致崩溃。
+
+> 如果运行于 JVM 平台,
+> 可以使用 [Karlatemp/LuckPerms-Mirai](https://github.com/Karlatemp/LuckPerms-Mirai)
+> 以得到更好的使用体验 (支持权限组, 权限检查状态详细输出等)
 
 ### 判断权限
 
@@ -156,13 +172,19 @@ fun Permission.testPermission(PermitteeId): Boolean
 
 在 Java，请查看 [`PermissionService`] 中的伴生对象。
 
+
+> 查看使用示例: [Him188/mirai-console-example-plugin](https://github.com/Him188/mirai-console-example-plugin/blob/master/src/main/kotlin/org/example/my/plugin/MyPluginMain.kt#L116)
+
+
 ### 注册权限
 
 每一条指令都会默认自动创建一个权限。
 
 如果希望手动注册一个其他用途的权限，使用 `PermissionService.register`。
 
-**注意**：权限只能在插件 [启用](Plugins.md#启用) 之后才能注册。否则会得到一个异常。
+**注意**：
+- 权限只能在插件 [启用](Plugins.md#启用) 之后才能注册。否则会得到一个异常。
+- 使用 `PermissionService.register` 时对于同一个 [`PermissionId`] 只能注册一次, 如果多次注册会得到一个异常
 
 ### 使用内置权限服务指令
 
